@@ -1,0 +1,7 @@
+euler
+*.dat
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+
