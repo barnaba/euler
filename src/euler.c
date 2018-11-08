@@ -3,8 +3,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "generator.h"
 
-#define DEFAULT_STEP 20
+const int defaultStepPow = 20;
 
 const double constR = 30; // 30 Ohm
 const double constL = 0.02; // 20mH
@@ -13,40 +14,6 @@ const double startIl = 0.0;
 const double startUc = 0.0;
 const double tMax = 0.01;
 
-double e1(double t){
-  return 1.0;
-}
-
-double edigital(double t){
-  while(t-0.005 > 0)
-    t -= 0.005;
-  return t<0.0025;
-}
-
-double esin50(double t){
-  return sin(2*M_PI*50*t);
-}
-
-double esin796(double t){
-  return sin(2*M_PI*796*t);
-}
-
-double esin900(double t){
-  return sin(2*M_PI*900*t);
-}
-
-typedef struct {
-  double (*e)(double t);
-  char name[10];
-} Generator;
-
-const Generator generators[5] = {
-  (Generator){.e = e1, .name="1v"},
-  (Generator){.e = esin50, .name="sin_f=50"},
-  (Generator){.e = esin796, .name="sin_f=796"},
-  (Generator){.e = esin900, .name="sin_f=900"},
-  (Generator){.e = edigital, .name="digital"}
-};
 
 double ucSlope(double il){
   // 1/C * il
@@ -64,22 +31,38 @@ double ilSlope(double e, double il, double uc){
 }
 
 int simulate(int steppow, FILE *plot, Generator g){
+    int i;
+    int maxi;
     double im1,im2,um1,um2;
     double t;
+    double e = 0.0;
 
     double prevIl = startIl;
     double prevUc = startUc;
 
     double step = powf(0.5, steppow);
     printf("step: %g\n", step);
-    fflush(stdout);
-    // m1 = f(xi,yi)
-    // m2 =...
-    // just see https://i.imgur.com/qhWvFZ1.png
+
+    double power;
+
+
+    maxi = floor(tMax / step);
+    maxi += maxi % 2;
+    //ensuring we have uneven number of iterations
+    printf("maxi: %d\n", maxi);
 
     //skip i=0 cause we already have prevIl and prevUc from back then
+    //we can do this cause power in t0 is also 0
+    //but lets calculate it for clarity
 
-    for(int i=1; (t=i*step) < tMax; ++i){
+    power = prevIl * g.e(0);
+
+    for(i=1; i <= maxi; ++i){
+      // m1 = f(xi,yi)
+      // m2 =...
+      // just see https://i.imgur.com/qhWvFZ1.png
+      t = i*step;
+
       um1 = ucSlope(prevIl);
       im1 = ilSlope(g.e(t),prevIl,prevUc);
 
@@ -89,18 +72,41 @@ int simulate(int steppow, FILE *plot, Generator g){
       prevIl = prevIl + step * ((im1 + im2)/2);
       prevUc = prevUc + step * ((um1 + um2)/2);
       fprintf(plot, "%f %f %f %f\n", t, prevIl, prevUc, g.e(t));
+
+    // i: 0      -> *1 - skipped
+    // i: odd    -> *2
+    // i: even   -> *4
+      power += (2+((i+1)%2*2)) * prevIl * g.e(t+step) ;
     }
+
+    //have to care about last term though
+
+    //last step should be even for that to not introduce an error
+    //so last step i was even, we did i++, it was  more than even maxi and is uneven now
+
+    //lets just check
+    assert((i%2)==1);
+
+    // so we kinda already did the last step, but it was *4, so removing 3 of those times
+    // this is not the cleanest way to do things perhaps
+    power -= 3 * prevIl * g.e(t+step);
+    power *= step/3;
+
+    printf("power: %g after %d steps\n", power, i);
+    fflush(stdout);
+
 
     return 0;
 }
 
 int main(int argc, char ** argv){
+  Generator * gens = generators();
   FILE *plot;
   char filepath[32];
-  int steppow = (argc < 2 ? DEFAULT_STEP : atoi(argv[1]));
+  int steppow = (argc < 2 ? defaultStepPow : atoi(argv[1]));
 
   for (int i=0; i<5; ++i){
-    Generator g = generators[i];
+    Generator g = gens[i];
 
     snprintf(filepath, sizeof(filepath[0]) * sizeof(filepath), "./%s%s", g.name, ".dat");
 
