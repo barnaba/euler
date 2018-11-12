@@ -32,7 +32,8 @@ double ilSlope(double e, double il, double uc){
 
 int simulate(int steppow, FILE *plot, Generator g){
     int i;
-    int maxi;
+    int steps = pow(2, steppow) + 1;
+
     double im1,im2,um1,um2;
     double t;
     double e = 0.0;
@@ -40,24 +41,16 @@ int simulate(int steppow, FILE *plot, Generator g){
     double prevIl = startIl;
     double prevUc = startUc;
 
-    double step = powf(0.5, steppow);
+    double step = tMax / steps;
+
     printf("step: %g\n", step);
-
-    double power;
-
-
-    maxi = floor(tMax / step);
-    maxi += maxi % 2;
-    //ensuring we have uneven number of iterations
-    printf("maxi: %d\n", maxi);
-
     //skip i=0 cause we already have prevIl and prevUc from back then
     //we can do this cause power in t0 is also 0
     //but lets calculate it for clarity
 
-    power = prevIl * g.e(0);
+    double power = prevIl * g.e(0);
 
-    for(i=1; i <= maxi; ++i){
+    for(i=1; i < steps; ++i){
       // m1 = f(xi,yi)
       // m2 =...
       // just see https://i.imgur.com/qhWvFZ1.png
@@ -82,7 +75,7 @@ int simulate(int steppow, FILE *plot, Generator g){
     //have to care about last term though
 
     //last step should be even for that to not introduce an error
-    //so last step i was even, we did i++, it was  more than even maxi and is uneven now
+    //so last step i was even, we did i++, and is uneven now
 
     //lets just check
     assert((i%2)==1);
@@ -92,7 +85,7 @@ int simulate(int steppow, FILE *plot, Generator g){
     power -= 3 * prevIl * g.e(t+step);
     power *= step/3;
 
-    printf("power: %g after %d steps\n", power, i);
+    printf("power: %g after %d steps\n", power, i-1);
     fflush(stdout);
 
 
